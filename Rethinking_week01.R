@@ -72,7 +72,19 @@ ggplot(dat, aes(x=p_grid2, y=posterior2)) +
             fill="red", 
             alpha = .3) +
   scale_fill_manual(" ", labels = c("PI", "HPDI")) +
-  theme_minimal()
+  theme_minimal()+
+  xlab("Probability of water") +
+  ylab("Posterior probability")
  
-# Pi is a bit wider than hpdi ~ 0.01
-# more questions to answer
+# PI is wider than HPDI, but in this case only marginally. HPDI is narrower, as 
+# it represents the intervals with the most dense probability mass. The information 
+# of the intervals doesn't show that the posterior probability is 0 for < 50% probability of water. 
+
+# 4? ------
+
+W <- 0.7
+false_L <- 0.2
+# Pr_Vampire <- 0.001
+# Pr_Positive <- Pr_Positive_Vampire * Pr_Vampire +
+#   Pr_Positive_Mortal * ( 1 - Pr_Vampire )
+# ( Pr_Vampire_Positive <- Pr_Positive_Vampire*Pr_Vampire / Pr_Positive )
