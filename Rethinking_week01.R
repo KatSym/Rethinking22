@@ -75,3 +75,4 @@ ggplot(dat, aes(x=p_grid2, y=posterior2)) +
   theme_minimal()
  
 # Pi is a bit wider than hpdi ~ 0.01
+# more questions to answer
