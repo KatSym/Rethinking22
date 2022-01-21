@@ -6,6 +6,7 @@ d = Howell1
 
 
 # 1 ----------
+
 adults = d %>% 
   filter(age >= 18)
 
@@ -19,17 +20,18 @@ adat = list(
 #model
 m <- quap(
   alist(
-    w ~ dnorm(mi, sigma) ,  # the correct greek pronunciation is mi (sorry)
+    w ~ dnorm(mi, sigma) ,  # in Greek we call it mi, so I will stick with that
     mi <- a + b*(h - h.av) ,  
     a ~ dnorm(60 , 10) ,
     b ~ dlnorm(0 , 1) ,
     sigma ~ dunif(0, 50)
   ) , data=adat)
 
-
+# compute mi for the given heights
 new.h = c(140, 160, 175)
 mi <- link(m, data = data.frame(h = new.h)) 
 
+#let's summarize
 mi.mean <- apply(mi, 2, mean)
 mi.PI <- apply(mi, 2, PI, prob=.89)
 
@@ -46,82 +48,83 @@ mi.PI <- apply(mi, 2, PI, prob=.89)
 # 2 --------
 
 kids = d %>% 
-  filter(age < 13)
+  filter(age <= 13) %>% 
+  mutate(sex = male + 1) %>% # note to self for later: 1=girl, 2=boy
+  select(-male)
 
+# let's see how they look like
 ggplot(kids, aes(x = weight, y = height)) + 
   geom_point()
 
-kdat <- list(
-  H = kids$height,
-  W = kids$weight,
-  H.av = mean(kids$height),
-  s = kids$male + 1
-)
+# explore priors
+set.seed(13)
+N <- 100 # 100 lines
+a <- rnorm( N , 10 , 5 )
+b <- rlnorm( N , 1 , .5 )
+plot( NULL , xlim=range(kids$age) , ylim=c(-5,40) ,
+      xlab="age" , ylab="weight" )
+for ( i in 1:N ) curve( a[i] + b[i]*x,
+                        from=min(kids$age) , to=max(kids$age) , add=TRUE ,
+                        col=col.alpha("black",0.2) )
+# I guess they are ok?
 
 
-m_full = quap(
+m_kids <- quap(
   alist(
-    
-    #weight
-    W ~ dnorm(mu, sigma),
-    mo = a[s] + b[s]*(H - H.av),
-    a[s] ~ dnorm(30,10),
-    b[s] ~ dlnorm(0,1),
-    sigma ~ dunif(0,10),
-    
-    # height
-    H ~ dnorm(ni, tau),
-    ni = k[s],
-    k[s] ~ dnorm(130, 10),
-    tau ~ dunif(0, 10)
+    weight ~ dnorm(mi, sigma),
+    mi <- a + b*age,
+    a ~ dnorm(20, 5),
+    b ~ dlnorm(1, .5),
+    sigma ~ dexp(1)
   ), data = kids)
-  
-m_kids <-  quap(
+
+precis(m_kids)
+
+# compute mi for each year of growth
+years <- seq(0, 13, 1)
+mi <- link(m_kids, data = data.frame(age = years))
+
+plot(weight ~ age, kids, type="n")
+for ( i in 1:100 ){
+  points( years , mi[i,] , pch=16 , col=col.alpha(rangi2,0.1) )}
+# bit of a heavy start and slow weight gain, but that's life
+
+
+# let's summarize mi
+mi.mean <- apply(mi, 2, mean)
+mi.PI <- apply(mi, 2, PI, prob=0.89)
+
+# plot raw data
+
+plot(weight ~ age, data=kids, col=col.alpha(rangi2,0.5))
+# draw MAP line
+lines(years, mi.mean)
+# plot a shaded region for PI
+shade(mi.PI, years)
+
+# 3 ----------
+
+m_kidsS <- quap(
   alist(
-    W ~ dnorm(mi, sigma),
-    mi <- a[s] + b[s]*(H - H.av),
-    a[s] ~ dnorm(30,10),
-    b[s] ~ dlnorm(0,1),
-    sigma ~ dunif(0,10),
-  ), data = kdat
-)
+    weight ~ dnorm(mi, sigma) ,
+    mi <- a[sex] + b[sex]*age,
+    a[sex] ~ dnorm(20, 5) ,
+    b[sex] ~ dlnorm(1, .5) ,
+    sigma ~ dexp(1)
+  ), data=kids)
 
-# from the slides
-xseq <- seq(130, 190, len= 50)
+precis(m_kidsS, depth = 2)
 
-miF <- link(
-  m_adults2, 
-  data = list(
-    S = rep(1,50), 
-    H=xseq, 
-    Hbar = mean(d$height)
-    )
-)
-lines(xseq, apply(miF, 2, mean), lwd = 3, col= 2)
+# compute separate mis for each year of growth for girls and boys
+miG = link(m_kidsS, data = list(sex=rep(1,14), age=years))
+miB = link(m_kidsS, data = list(sex=rep(2,14), age=years))
 
-miM <- link(
-  m_adults2, 
-  data = list(
-    S = rep(2,50), 
-    H=xseq, 
-    Hbar = mean(d$height)
-  )
-)
-lines(xseq, apply(miM, 2, mean), lwd = 3, col= 4)
+mi.contr = miB-miG
 
-mi_contrast <- miF - miM
-
-
-
-)
-
-HWsim <- sim(m_full,
-             data = list(S = c(1,2)),
-             vars = c("H","W"))
-W-Sauto <- HWsim[,2] - HWsim[,1]
-
-
-
-
-
-
+#plot the difference
+plot(NULL, xlim=range(years), ylim=c(-1,5), xlab = "Age", ylab = "Weight contrast of B-G")
+for (p in c(.5, .6, .7, .8, .9)) {
+  shade(apply(mi.contr, 2, PI, prob=p), years)
+}
+abline(h=0,lty=2)
+# as it turns out boys are always heavier than girls
