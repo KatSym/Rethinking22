@@ -35,15 +35,10 @@ compare(m6.9, m6.10, func = WAIC)
 compare(m6.9, m6.10, func = PSIS)
 
 
-# in both cases the metric is huge, but in both cases the model that considers the married status
+# in both cases the metric is huge, but in both cases the model that considers the married status is
 # preferred (m6.9)
 
 
-# The first model is expected to make better predictions
-
-# a[1] and a[2] are the expected happines among unmarried and married 
-# people. bA is the correlation of hapiness and age stratified by marital 
-# status
 
 
 # 2 ---------
@@ -79,11 +74,8 @@ m.FWG <- quap(
 compare(m.FW, m.FWG, func = WAIC)
 
 
-# m.FWG does better at prediction
-# a is the expected mean fox weigth, bF is the direct 
-# effect of food on weight and bG is the effect of 
-# groupsize on weight.
-
+# m.FWG is slightly better at prediction. a is the expected mean fox weigth, bF is the direct 
+# effect of food on weight and bG is the effect of groupsize on weight.
 
 
 # 3 --------
@@ -95,6 +87,14 @@ b <- cherry_blossoms %>%
   mutate(T = scale(temp),
          D = scale(doy))
   
+num_knots <- 10
+knot_list <- quantile( b$T , probs=seq(0,1,length.out=num_knots) )
+
+library(splines)
+B <- bs(b$T,
+        knots=knot_list[-c(1,num_knots)] ,
+        degree=3 , intercept=TRUE )
+
 
 
 m <- quap(
@@ -115,19 +115,28 @@ for ( i in 1:100 ) lines( xseq , mu[i,] , col=col.alpha("black",0.3) )
 precis(m)
 plot( b$T , b$D , lwd=1, col=8 )
 post <- extract.samples(m)
-for ( i in 1:100 ) abline( post$a[i] , 
-                           post$b[i] , 
-                           lwd=3 , col=alpha(4, 0.1) )
+for ( i in 1:100 ) abline( post$a[i] , post$b[i] , lwd=3 , col=alpha(4, 0.1) )
 
 m2 <- quap(
   alist(
-    D ~ dnorm( mu , lsigma ) ,
+    D ~ dnorm( mu , sigma ) ,
     mu <- aT + b[1]*T + b[2]*T^2, 
     aT ~ dnorm( 0 , .1 ) ,
     b ~ dnorm( 0 , .3 ) ,
     # bY ~ dnorm( 0 , .3 ) ,
-    lsigma ~ dnorm( 0, 1 )
-  ) , data=b)
+    sigma ~ dexp( 1 )
+  ) , data=b, start=list(b=rep(0,2)))
+
+m3 <- quap(
+  alist(
+    D ~ dnorm( mu , sigma ) ,
+    mu <- a + B %*% w ,
+    a ~ dnorm(0, .1),
+    w ~ dnorm(0 , 3),
+    sigma ~ dexp(1)
+  ), data=list( D=b$doy , B=B ) ,
+  start=list( w=rep( 0 , ncol(B) ) ) )
 
 
-compare(m, m2, func = PSIS)
+
+compare(m, m3, func = WAIC)
