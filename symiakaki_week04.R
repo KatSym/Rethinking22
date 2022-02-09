@@ -83,60 +83,32 @@ compare(m.FW, m.FWG, func = WAIC)
 data("cherry_blossoms")
 
 b <- cherry_blossoms %>% 
-  drop_na() %>% 
-  mutate(T = scale(temp),
-         D = scale(doy))
-  
-num_knots <- 10
-knot_list <- quantile( b$T , probs=seq(0,1,length.out=num_knots) )
-
-library(splines)
-B <- bs(b$T,
-        knots=knot_list[-c(1,num_knots)] ,
-        degree=3 , intercept=TRUE )
-
-
+  drop_na() 
 
 m <- quap(
   alist(
-    D ~ dnorm( mu , sigma ) ,
-    mu <- aT + bT*T,
-    aT ~ dnorm( 0 , .1 ) ,
-    bT ~ dnorm( 0 , .3 ) ,
+    doy ~ dnorm( mu , sigma ) ,
+    mu <- aT + bT*temp,
+    aT ~ dnorm( 0 , 5 ) ,
+    bT ~ dnorm( 0 , 5 ) ,
     sigma ~ dexp( 1 )
   ) , data=b)
 
-# prior predictive check
-prior <- extract.prior( m )
-xseq <- c(-2,2)
-mu <- link( m , post = prior , data=list(T=xseq))
-plot( NULL , xlim=xseq , ylim=xseq )
-for ( i in 1:100 ) lines( xseq , mu[i,] , col=col.alpha("black",0.3) )
-precis(m)
-plot( b$T , b$D , lwd=1, col=8 )
-post <- extract.samples(m)
-for ( i in 1:100 ) abline( post$a[i] , post$b[i] , lwd=3 , col=alpha(4, 0.1) )
-
 m2 <- quap(
   alist(
-    D ~ dnorm( mu , sigma ) ,
-    mu <- aT + b[1]*T + b[2]*T^2, 
-    aT ~ dnorm( 0 , .1 ) ,
-    b ~ dnorm( 0 , .3 ) ,
-    # bY ~ dnorm( 0 , .3 ) ,
+    doy ~ dnorm( mu , sigma ) ,
+    mu <- aT + b[1]*temp + b[2]*temp^2, 
+    aT ~ dnorm( 0 , 5 ) ,
+    b ~ dnorm( 0 , 5) ,
     sigma ~ dexp( 1 )
   ) , data=b, start=list(b=rep(0,2)))
 
-m3 <- quap(
-  alist(
-    D ~ dnorm( mu , sigma ) ,
-    mu <- a + B %*% w ,
-    a ~ dnorm(0, .1),
-    w ~ dnorm(0 , 3),
-    sigma ~ dexp(1)
-  ), data=list( D=b$doy , B=B ) ,
-  start=list( w=rep( 0 , ncol(B) ) ) )
 
+compare(m, m2, func = WAIC)
+# the polynomial model is better
 
+D <- sim( m2 , data=list(temp=9) )
+dens( D , lwd=3 , col=2 , xlab="1st bloom @ 9oC")
+abline(v = mean(D))
 
-compare(m, m3, func = WAIC)
+# The 1st bloom will happen on day 81 which is Tuesday March 22nd in 2050
